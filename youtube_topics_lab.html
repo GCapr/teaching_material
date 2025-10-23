@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>YouTube Topics & Concentration Lab</title>
+<link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+<script defer src="https://pyscript.net/latest/pyscript.js"></script>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 1rem;
+  line-height: 1.5;
+}
+pre, code {
+  background: #f6f8fa;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+h1, h2, h3 {
+  color: #2a2a2a;
+}
+button {
+  background-color: #0069d9;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button:hover { background-color: #0053ad; }
+#output {
+  background: #f9fafb;
+  border: 1px solid #ddd;
+  padding: 1rem;
+  margin-top: 1rem;
+  white-space: pre-wrap;
+}
+canvas { margin-top: 1rem; }
+</style>
+</head>
+
+<body>
+<h1>🎓 YouTube Topics & Concentration (Economics Lab)</h1>
+<p>
+This interactive lab fetches free public metadata from YouTube’s <b>RSS feeds</b> (no API key or login),
+labels each video into one of 10 economic topics, and measures <b>topic concentration</b> using the
+Herfindahl–Hirschman Index (HHI).
+</p>
+
+<h2>Step 1 – Choose a YouTube feed</h2>
+<p>
+Enter a <b>channel ID</b>, <b>user</b>, or <b>playlist ID</b>. Examples:
+<ul>
+<li><code>UC_x5XG1OV2P6uZZ5FSM9Ttw</code> → Google Developers</li>
+<li><code>UCLXo7UDZvByw2ixzpQCufnA</code> → The Economist</li>
+</ul>
+</p>
+<input id="channelInput" type="text" size="50" placeholder="Enter YouTube channel ID here" />
+<button id="runBtn">Run Analysis</button>
+
+<div id="output">Output will appear here...</div>
+
+<py-config>
+packages = ["feedparser", "pandas", "matplotlib", "scikit-learn"]
+</py-config>
+
+<py-script>
+from pyscript import display
+import feedparser, pandas as pd, matplotlib.pyplot as plt
+from io import BytesIO
+import base64, math, re
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+TOPICS = [
+    "Policy & regulation",
+    "Macroeconomy",
+    "Finance & crypto",
+    "Labor & gig economy",
+    "Competition/antitrust",
+    "Platforms & creators",
+    "Misinformation & moderation",
+    "Ads & monetization",
+    "Privacy & data",
+    "Technology & AI",
+]
+
+SEEDS = {
+    "Policy & regulation": ["policy","regulation","law","bill","compliance","DMA","DSA"],
+    "Macroeconomy": ["inflation","recession","gdp","interest rate","monetary","central bank"],
+    "Finance & crypto": ["stock","crypto","bitcoin","finance","trading","markets"],
+    "Labor & gig economy": ["labor","job","gig","wage","employment","freelance"],
+    "Competition/antitrust": ["antitrust","monopoly","competition","market power"],
+    "Platforms & creators": ["creator","influencer","subscriber","platform","tiktok","shorts"],
+    "Misinformation & moderation": ["misinformation","moderation","fact-check"],
+    "Ads & monetization": ["ad","advertising","cpm","monetization","sponsor"],
+    "Privacy & data": ["privacy","data","tracking","surveillance","gdpr"],
+    "Technology & AI": ["ai","algorithm","machine learning","neural","tech"],
+}
+
+def keyword_label(text):
+    t = text.lower()
+    best, hits = None, 0
+    for topic, words in SEEDS.items():
+        c = sum(w in t for w in words)
+        if c > hits:
+            best, hits = topic, c
+    return best
+
+def tfidf_label(texts):
+    topic_docs = [(t, t + " " + " ".join(SEEDS[t])) for t in TOPICS]
+    corpus = [doc for _, doc in topic_docs] + texts
+    vec = TfidfVectorizer(stop_words="english").fit(corpus)
+    X = vec.transform(corpus)
+    T = len(topic_docs)
+    sims = cosine_similarity(X[T:], X[:T])
+    labels = [topic_docs[i][0] for i in sims.argmax(axis=1)]
+    return labels
+
+def assign_topics(texts):
+    labels = [keyword_label(t) for t in texts]
+    none_idx = [i for i, l in enumerate(labels) if l is None]
+    if none_idx:
+        fallbacks = tfidf_label([texts[i] for i in none_idx])
+        for j,i in enumerate(none_idx): labels[i] = fallbacks[j]
+    return labels
+
+def hhi(counts):
+    s = counts / counts.sum()
+    return float((s**2).sum())
+
+def plot_bar(series):
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.bar(series.index, series.values)
+    ax.set_ylabel("Share of videos")
+    ax.set_title("Topic shares (YouTube RSS)")
+    plt.xticks(rotation=45, ha="right")
+    buf = BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format='png', dpi=100)
+    plt.close(fig)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+def run_feed(channel_id):
+    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id.strip()}"
+    d = feedparser.parse(url)
+    if not d.entries:
+        return f"❌ No videos found for channel {channel_id}. Check the ID."
+    rows = []
+    for e in d.entries[:50]:
+        title = e.get("title","")
+        link = e.get("link","")
+        author = e.get("author","")
+        pub = e.get("published","")
+        rows.append({"title": title, "link": link, "author": author, "published": pub})
+    df = pd.DataFrame(rows)
+    df["topic"] = assign_topics(df["title"].fillna("").tolist())
+    counts = df["topic"].value_counts().reindex(TOPICS, fill_value=0)
+    shares = counts / max(counts.sum(),1)
+    h = hhi(counts)
+    chart_url = plot_bar(shares)
+    summary = f"HHI (equal weight): {h:.3f}\n\nTopic counts:\n{counts.to_string()}"
+    html = f"<pre>{summary}</pre><img src='{chart_url}' width='700' />"
+    return html
+
+# Bind to button
+from js import document
+def on_click(event):
+    cid = document.getElementById("channelInput").value
+    out = document.getElementById("output")
+    out.innerHTML = "⏳ Fetching feed and analyzing..."
+    result = run_feed(cid)
+    out.innerHTML = result
+
+document.getElementById("runBtn").addEventListener("click", on_click)
+</py-script>
+
+<hr>
+<p><small>
+© 2025 — Educational use only. This page runs entirely in your browser using PyScript.
+No keys, no tracking, and no data leaves your computer.
+</small></p>
+</body>
+</html>
