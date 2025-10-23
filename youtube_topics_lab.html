@@ -1,79 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>YouTube Topics & Concentration Lab</title>
+<meta charset="UTF-8" />
+<title>Economics of Social Media – YouTube Topics & Concentration (Modular Lab)</title>
+
+<!-- PyScript: Python in the browser -->
 <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
 <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+
+<!-- Styling -->
 <style>
-body {
-  font-family: system-ui, sans-serif;
-  max-width: 900px;
-  margin: 40px auto;
-  padding: 1rem;
-  line-height: 1.5;
-}
-pre, code {
-  background: #f6f8fa;
-  padding: 4px 6px;
-  border-radius: 4px;
-}
-h1, h2, h3 {
-  color: #2a2a2a;
-}
-button {
-  background-color: #0069d9;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-button:hover { background-color: #0053ad; }
-#output {
-  background: #f9fafb;
-  border: 1px solid #ddd;
-  padding: 1rem;
-  margin-top: 1rem;
-  white-space: pre-wrap;
-}
-canvas { margin-top: 1rem; }
+  :root { --bg:#fff; --ink:#1f2937; --muted:#6b7280; --accent:#2563eb; --panel:#f8fafc; }
+  html, body { background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  main { max-width: 1000px; margin: 32px auto; padding: 0 16px; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { margin-top: 2.5rem; }
+  h3 { margin-top: 1.2rem; }
+  p.lead { color: var(--muted); margin-top: 0.25rem; }
+  nav { position: sticky; top: 0; background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e7eb; z-index: 10; }
+  nav .wrap { max-width: 1000px; margin: 0 auto; padding: 10px 16px; display:flex; gap:12px; flex-wrap:wrap; }
+  nav a { text-decoration: none; color: var(--accent); font-weight: 600; }
+  section.module { background: var(--panel); border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; margin-top: 18px; }
+  .code-caption { font-size: 0.9rem; color: var(--muted); margin: 8px 0 4px; }
+  .note { background: #eef2ff; border: 1px solid #dbeafe; padding: 10px 12px; border-radius: 8px; }
+  .small { font-size: 0.9rem; color: var(--muted); }
+  .hr { height: 1px; background: #e5e7eb; margin: 16px 0; }
+  .kbd { padding: 2px 6px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  button.run { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button.run:hover { filter: brightness(0.95); }
+  .output { background: #fff; border:1px solid #e5e7eb; padding:12px; border-radius:8px; margin-top:10px; }
+  .muted { color: var(--muted); }
+  /* Make PyScript repl look like notebook cells */
+  py-repl, .py-terminal { width: 100%; }
+  .cell { margin-top: 10px; }
 </style>
-</head>
 
-<body>
-<h1>🎓 YouTube Topics & Concentration (Economics Lab)</h1>
-<p>
-This interactive lab fetches free public metadata from YouTube’s <b>RSS feeds</b> (no API key or login),
-labels each video into one of 10 economic topics, and measures <b>topic concentration</b> using the
-Herfindahl–Hirschman Index (HHI).
-</p>
-
-<h2>Step 1 – Choose a YouTube feed</h2>
-<p>
-Enter a <b>channel ID</b>, <b>user</b>, or <b>playlist ID</b>. Examples:
-<ul>
-<li><code>UC_x5XG1OV2P6uZZ5FSM9Ttw</code> → Google Developers</li>
-<li><code>UCLXo7UDZvByw2ixzpQCufnA</code> → The Economist</li>
-</ul>
-</p>
-<input id="channelInput" type="text" size="50" placeholder="Enter YouTube channel ID here" />
-<button id="runBtn">Run Analysis</button>
-
-<div id="output">Output will appear here...</div>
-
+<!-- PyScript package config (pure-Python + Pyodide-supported wheels) -->
 <py-config>
-packages = ["feedparser", "pandas", "matplotlib", "scikit-learn"]
+packages = [
+  "feedparser",
+  "pandas",
+  "numpy",
+  "matplotlib"
+]
 </py-config>
+</head>
+<body>
 
-<py-script>
-from pyscript import display
-import feedparser, pandas as pd, matplotlib.pyplot as plt
+<nav>
+  <div class="wrap">
+    <a href="#intro">Intro</a>
+    <a href="#setup">Setup</a>
+    <a href="#scrape">Module 1: Extract from YouTube (RSS)</a>
+    <a href="#topics">Module 2: Topics & Embeddings (TF‑IDF)</a>
+    <a href="#analysis">Module 3: Summary Stats & Graphs (HHI)</a>
+    <a href="#save">Module 4: Save Results</a>
+  </div>
+</nav>
+
+<main>
+<header id="intro">
+  <h1>Economics of Social Media – YouTube Topics & Concentration</h1>
+  <p class="lead">A browser‑only, zero‑cost lab: extract YouTube metadata via public feeds, label topics with local embeddings, and measure concentration (HHI).</p>
+</header>
+
+<section class="module">
+  <h2>What this class is about (and why economists care)</h2>
+  <p>
+    We’ll study how attention is distributed across <em>topics</em> on YouTube. You’ll:
+  </p>
+  <ul>
+    <li><strong>Extract data</strong> from public YouTube RSS/Atom feeds (no API keys, no scraping of watch pages, ToS‑friendly).</li>
+    <li><strong>Build embeddings</strong> (TF‑IDF vectors) to map text into numbers and <strong>assign each video a topic</strong>.</li>
+    <li><strong>Measure concentration</strong> across topics using the <strong>Herfindahl–Hirschman Index (HHI)</strong> and visualize results.</li>
+  </ul>
+  <p class="note small">
+    Why RSS? Browser security (CORS) blocks direct cross‑site reads. We use a free, read‑only CORS relay
+    (<code>https://api.allorigins.win</code>) to fetch the public feed content with proper CORS headers. Nothing is stored server‑side.
+  </p>
+</section>
+
+<!-- =============================== -->
+<!-- SETUP (imports + helpers)      -->
+<!-- =============================== -->
+<section class="module" id="setup">
+  <h2>Setup: imports, helpers, topics</h2>
+  <p>
+    Run this once. It imports libraries, defines helper functions, and sets the 10 topics and their seed keywords.
+    The code is fully commented so you can read and learn.
+  </p>
+
+  <div class="code-caption">Cell A — Imports, feed fetcher (with CORS relay), tokenization, TF‑IDF, HHI, and plotting helpers.</div>
+  <py-repl id="cell-setup" class="cell" output-mode="replace">
+# --- Imports ---
+import re, math, base64
+from urllib.parse import quote as url_quote
 from io import BytesIO
-import base64, math, re
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
+import numpy as np
+import pandas as pd
+import feedparser
+import matplotlib.pyplot as plt
+from pyodide.http import open_url
+
+# --- Topics & seed words (edit to match your syllabus) ---
 TOPICS = [
     "Policy & regulation",
     "Macroeconomy",
@@ -88,99 +118,325 @@ TOPICS = [
 ]
 
 SEEDS = {
-    "Policy & regulation": ["policy","regulation","law","bill","compliance","DMA","DSA"],
-    "Macroeconomy": ["inflation","recession","gdp","interest rate","monetary","central bank"],
-    "Finance & crypto": ["stock","crypto","bitcoin","finance","trading","markets"],
-    "Labor & gig economy": ["labor","job","gig","wage","employment","freelance"],
-    "Competition/antitrust": ["antitrust","monopoly","competition","market power"],
-    "Platforms & creators": ["creator","influencer","subscriber","platform","tiktok","shorts"],
-    "Misinformation & moderation": ["misinformation","moderation","fact-check"],
-    "Ads & monetization": ["ad","advertising","cpm","monetization","sponsor"],
-    "Privacy & data": ["privacy","data","tracking","surveillance","gdpr"],
-    "Technology & AI": ["ai","algorithm","machine learning","neural","tech"],
+    "Policy & regulation": ["policy","regulation","law","bill","compliance","dma","dsa","fcc","ofcom","eu act"],
+    "Macroeconomy": ["inflation","recession","gdp","interest rate","monetary","central bank","macro"],
+    "Finance & crypto": ["stock","crypto","bitcoin","ethereum","finance","trading","markets","portfolio"],
+    "Labor & gig economy": ["labor","jobs","wage","gig","freelance","union","strike","creator job"],
+    "Competition/antitrust": ["antitrust","monopoly","market power","merger","competition","cartel"],
+    "Platforms & creators": ["creator","influencer","subscriber","platform","tiktok","shorts","youtube"],
+    "Misinformation & moderation": ["misinformation","disinformation","moderation","content policy","fact-check"],
+    "Ads & monetization": ["ad","ads","advertising","cpm","rpm","monetization","sponsorship"],
+    "Privacy & data": ["privacy","data","gdpr","tracking","cookie","surveillance","encryption"],
+    "Technology & AI": ["ai","algorithm","machine learning","neural","recommendation","model","tech"],
 }
 
-def keyword_label(text):
-    t = text.lower()
-    best, hits = None, 0
-    for topic, words in SEEDS.items():
-        c = sum(w in t for w in words)
-        if c > hits:
-            best, hits = topic, c
-    return best
+# --- Utility: pretty print a small DataFrame ---
+def show_head(df, n=5):
+    try:
+        from pyscript import display
+        display(df.head(n))
+    except Exception:
+        print(df.head(n).to_string())
 
-def tfidf_label(texts):
-    topic_docs = [(t, t + " " + " ".join(SEEDS[t])) for t in TOPICS]
-    corpus = [doc for _, doc in topic_docs] + texts
-    vec = TfidfVectorizer(stop_words="english").fit(corpus)
-    X = vec.transform(corpus)
-    T = len(topic_docs)
-    sims = cosine_similarity(X[T:], X[:T])
-    labels = [topic_docs[i][0] for i in sims.argmax(axis=1)]
-    return labels
+# --- Fetch YouTube RSS feed (via read-only CORS relay) ---
+def fetch_youtube_feed(channel_id: str, limit: int = 50,
+                       relay_base: str = "https://api.allorigins.win/raw?url=") -> pd.DataFrame:
+    """
+    Build the normal YouTube feed URL, then wrap it with a CORS relay for the browser.
+    Returns a DataFrame with (title, link, published, author).
+    """
+    base = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id.strip()}"
+    proxied_url = relay_base + url_quote(base, safe='')
+    xml = open_url(proxied_url).read()            # fetch raw XML via CORS-safe proxy
+    feed = feedparser.parse(xml)                  # parse RSS/Atom into Python dict
+    rows = []
+    for e in feed.entries[:limit]:
+        rows.append({
+            "title": e.get("title",""),
+            "link": e.get("link",""),
+            "published": e.get("published",""),
+            "author": e.get("author","")
+        })
+    return pd.DataFrame(rows)
 
-def assign_topics(texts):
-    labels = [keyword_label(t) for t in texts]
-    none_idx = [i for i, l in enumerate(labels) if l is None]
-    if none_idx:
-        fallbacks = tfidf_label([texts[i] for i in none_idx])
-        for j,i in enumerate(none_idx): labels[i] = fallbacks[j]
-    return labels
+# --- Tokenization ---
+WORD_RE = re.compile(r"[A-Za-z0-9']+")
+def tokenize(text: str):
+    return WORD_RE.findall((text or "").lower())
 
-def hhi(counts):
-    s = counts / counts.sum()
-    return float((s**2).sum())
+# --- Build TF-IDF (free local embeddings) ---
+def tfidf_matrix(texts: list[str]):
+    """
+    Return (X, vocab, idf):
+      X: L2-normalized TF-IDF matrix (n_docs x vocab_size)
+      vocab: dict token -> column index
+      idf:   numpy vector (vocab_size,)
+    """
+    # 1) Tokenize all docs
+    docs_tokens = [tokenize(t) for t in texts]
+    # 2) Build vocabulary from tokens that actually appear
+    vocab = {}
+    for toks in docs_tokens:
+        for tok in set(toks):
+            if tok not in vocab:
+                vocab[tok] = len(vocab)
+    V = len(vocab)
+    N = len(texts)
+    if V == 0 or N == 0:
+        return np.zeros((N,0)), {}, np.zeros((0,))
+    # 3) Document frequency per token
+    df = np.zeros(V, dtype=np.int32)
+    for toks in docs_tokens:
+        for tok in set(toks):
+            df[vocab[tok]] += 1
+    # 4) IDF with +1 smoothing
+    idf = np.log((N + 1) / (df + 1)) + 1.0
+    # 5) Build TF counts then weight by IDF, L2-normalize rows
+    X = np.zeros((N, V), dtype=float)
+    for i, toks in enumerate(docs_tokens):
+        for tok in toks:
+            j = vocab[tok]
+            X[i, j] += 1.0
+    X *= idf  # TF * IDF
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    X = X / norms
+    return X, vocab, idf
 
-def plot_bar(series):
-    fig, ax = plt.subplots(figsize=(7,4))
-    ax.bar(series.index, series.values)
-    ax.set_ylabel("Share of videos")
-    ax.set_title("Topic shares (YouTube RSS)")
-    plt.xticks(rotation=45, ha="right")
+def cosine_sim(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """ Cosine similarity between two L2-normalized matrices (n x d) and (m x d) """
+    if A.shape[1] == 0 or B.shape[1] == 0:
+        return np.zeros((A.shape[0], B.shape[0]))
+    return A @ B.T
+
+# --- Topic classifier (topics = nearest topic doc in TF-IDF space) ---
+def assign_topics_with_tfidf(titles: list[str]) -> list[str]:
+    topic_docs = [t + " " + " ".join(SEEDS.get(t, [])) for t in TOPICS]
+    corpus = topic_docs + titles
+    X, vocab, idf = tfidf_matrix(corpus)
+    T = len(TOPICS)
+    X_topics = X[:T, :]
+    X_docs   = X[T:, :]
+    S = cosine_sim(X_docs, X_topics)   # (n_docs x T)
+    idx = S.argmax(axis=1)
+    return [TOPICS[i] for i in idx], X_docs, X_topics, vocab
+
+# --- HHI (concentration) ---
+def hhi_from_counts(counts: pd.Series) -> float:
+    total = counts.sum()
+    if total <= 0: return 0.0
+    shares = counts / total
+    return float(np.sum(shares**2))
+
+# --- Plot helpers (render to base64 for inline <img>) ---
+def fig_to_data_url():
     buf = BytesIO()
     plt.tight_layout()
-    plt.savefig(buf, format='png', dpi=100)
-    plt.close(fig)
+    plt.savefig(buf, format="png", dpi=120, bbox_inches="tight")
+    plt.close()
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
-def run_feed(channel_id):
-    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id.strip()}"
-    d = feedparser.parse(url)
-    if not d.entries:
-        return f"❌ No videos found for channel {channel_id}. Check the ID."
-    rows = []
-    for e in d.entries[:50]:
-        title = e.get("title","")
-        link = e.get("link","")
-        author = e.get("author","")
-        pub = e.get("published","")
-        rows.append({"title": title, "link": link, "author": author, "published": pub})
-    df = pd.DataFrame(rows)
-    df["topic"] = assign_topics(df["title"].fillna("").tolist())
-    counts = df["topic"].value_counts().reindex(TOPICS, fill_value=0)
-    shares = counts / max(counts.sum(),1)
-    h = hhi(counts)
-    chart_url = plot_bar(shares)
-    summary = f"HHI (equal weight): {h:.3f}\n\nTopic counts:\n{counts.to_string()}"
-    html = f"<pre>{summary}</pre><img src='{chart_url}' width='700' />"
-    return html
+def plot_topic_shares(counts: pd.Series, title="Topic shares (equal weight per video)"):
+    plt.figure()
+    shares = counts / max(1, counts.sum())
+    plt.bar(range(len(counts.index)), shares.values)
+    plt.xticks(range(len(counts.index)), counts.index, rotation=45, ha="right")
+    plt.ylabel("Share of videos")
+    plt.title(title)
+    return fig_to_data_url()
 
-# Bind to button
+def pca_project(X: np.ndarray, k=2):
+    """Tiny PCA via SVD on centered matrix (for 2D embedding plot)."""
+    if X.size == 0: return np.zeros((X.shape[0], k))
+    Xc = X - X.mean(axis=0, keepdims=True)
+    U, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+    return Xc @ Vt.T[:, :k]
+
+print("✅ Setup complete. Proceed to Module 1.")
+  </py-repl>
+</section>
+
+<!-- =============================== -->
+<!-- MODULE 1: Scraping / Extract    -->
+<!-- =============================== -->
+<section class="module" id="scrape">
+  <h2>Module 1 — Extract data from YouTube (public RSS/Atom)</h2>
+  <p>
+    We’ll pull the latest <em>~50</em> videos from a channel using its public feed.
+    No API keys, no cost. We only collect <strong>metadata</strong> (title, link, published, author).
+  </p>
+  <p class="note small">
+    If your school network blocks the default relay (<code>api.allorigins.win</code>), replace
+    <code>relay_base</code> with another read‑only CORS relay (e.g., <code>https://cors.isomorphic-git.org/</code> + full URL).
+  </p>
+
+  <div class="code-caption">Cell B — Choose a channel and fetch up to 50 items (edit the channel ID).</div>
+  <py-repl id="cell-scrape" class="cell" output-mode="replace">
+# --- Choose a channel (examples in the comments) ---
+# Google Developers:   UC_x5XG1OV2P6uZZ5FSM9Ttw
+# The Economist:       UCLXo7UDZvByw2ixzpQCufnA
+CHANNEL_ID = "UCLXo7UDZvByw2ixzpQCufnA"   # ← edit me in class
+LIMIT      = 50
+
+df = fetch_youtube_feed(CHANNEL_ID, limit=LIMIT)
+print(f"Fetched {len(df)} items. Preview:")
+show_head(df, 8)
+  </py-repl>
+
+  <div class="hr"></div>
+  <p class="small muted">
+    <strong>Concept check:</strong> We used an official, public feed (like a podcast feed). We did not scrape watch pages or collect PII.  
+    This makes the exercise reproducible and ToS‑friendly.
+  </p>
+</section>
+
+<!-- =============================== -->
+<!-- MODULE 2: Topics & Embeddings   -->
+<!-- =============================== -->
+<section class="module" id="topics">
+  <h2>Module 2 — Topics via local embeddings (TF‑IDF)</h2>
+  <p>
+    We’ll represent each title as a numeric vector (“<em>embedding</em>”) using TF‑IDF:
+  </p>
+  <ol>
+    <li><strong>Tokenize</strong> titles into words.</li>
+    <li>Build a vocabulary and compute <strong>IDF</strong> (rare words get higher weight).</li>
+    <li>For each title, compute <strong>TF‑IDF</strong> and L2‑normalize the vector.</li>
+    <li>Create one “<strong>topic document</strong>” per topic (topic name + seed words), embed those too.</li>
+    <li>Assign to the <strong>nearest topic</strong> by cosine similarity.</li>
+  </ol>
+
+  <div class="code-caption">Cell C — Make embeddings, label topics, and peek at a few assignments.</div>
+  <py-repl id="cell-topics" class="cell" output-mode="replace">
+assert "df" in globals(), "Please run Module 1 first to create df."
+
+titles = df["title"].fillna("").astype(str).tolist()
+labels, X_docs, X_topics, vocab = assign_topics_with_tfidf(titles)
+df["topic"] = labels
+
+print("Assigned topics. Sample:")
+print(df[["title","topic"]].head(10).to_string(index=False))
+
+# --- Tiny demo: show top TF-IDF terms for the first title ---
+def top_tfidf_terms_for_row(text, X_row, vocab, k=8):
+    inv = {j:w for w,j in vocab.items()}
+    idx = np.argsort(-X_row)[:k]
+    return [(inv[i], round(float(X_row[i]), 3)) for i in idx if X_row[i] > 0]
+
+if X_docs.shape[0] > 0 and X_docs.shape[1] > 0:
+    demo = top_tfidf_terms_for_row(titles[0], X_docs[0], vocab, k=8)
+    print("\nTop TF-IDF terms for the first title:\n", demo)
+else:
+    print("\n(Embedding matrix is empty — likely no tokens found.)")
+  </py-repl>
+
+  <div class="hr"></div>
+  <p class="small muted">
+    <strong>Why this is “embedding”:</strong> Each title is turned into a vector of numbers that capture word importance.
+    Cosine similarity makes titles close to the topic whose seed words and label best match their vocabulary.
+    (Paid options like “LLM embeddings” exist, but TF‑IDF is free, transparent, and perfect for teaching.)
+  </p>
+</section>
+
+<!-- =============================== -->
+<!-- MODULE 3: Summary & Graphs      -->
+<!-- =============================== -->
+<section class="module" id="analysis">
+  <h2>Module 3 — Summary statistics & figures (HHI + plots)</h2>
+  <p>
+    We’ll compute the <strong>Herfindahl–Hirschman Index (HHI)</strong> over topic shares (equal weight per video),
+    print a table of counts, and draw two figures:
+  </p>
+  <ul>
+    <li><strong>Bar chart</strong> of topic shares.</li>
+    <li><strong>2D scatter</strong> of the TF‑IDF embeddings (via PCA) colored by topic.</li>
+  </ul>
+
+  <div class="code-caption">Cell D — HHI, topic counts, bar chart, and 2D embedding scatter.</div>
+  <py-repl id="cell-analysis" class="cell" output-mode="replace">
+assert "df" in globals() and "X_docs" in globals(), "Run Modules 1–2 first."
+
+# --- Counts and HHI (equal weight) ---
+counts = df["topic"].value_counts().reindex(TOPICS, fill_value=0)
+hhi_val = hhi_from_counts(counts)
+print("=== Topic counts ===")
+print(counts.to_string())
+print(f"\nHHI (equal weight): {hhi_val:.4f}")
+
+# --- Plot 1: Topic share bar chart ---
+img1 = plot_topic_shares(counts, title="Topic shares (equal weight per video)")
+
+# --- Plot 2: 2D PCA of embeddings (visualize clusters) ---
+Z = pca_project(X_docs, k=2)  # shape: (n_docs, 2)
+plt.figure()
+for t in TOPICS:
+    idx = (df["topic"].values == t)
+    if idx.sum() == 0: 
+        continue
+    plt.scatter(Z[idx,0], Z[idx,1], label=t, s=20)  # default colors
+plt.xlabel("PC1"); plt.ylabel("PC2"); plt.title("2D view of TF-IDF embeddings (PCA)")
+plt.legend(fontsize=8, ncol=2)
+img2 = fig_to_data_url()
+
+# --- Display images inline ---
 from js import document
-def on_click(event):
-    cid = document.getElementById("channelInput").value
-    out = document.getElementById("output")
-    out.innerHTML = "⏳ Fetching feed and analyzing..."
-    result = run_feed(cid)
-    out.innerHTML = result
+out = document.createElement("div")
+out.className = "output"
+out.innerHTML = f"<img src='{img1}' width='820' /><br/><img src='{img2}' width='820' />"
+document.currentScript.closest("section").appendChild(out)
+  </py-repl>
 
-document.getElementById("runBtn").addEventListener("click", on_click)
-</py-script>
+  <div class="hr"></div>
+  <p class="small muted">
+    <strong>Interpretation tips:</strong> Higher HHI ⇒ a few topics dominate attention.
+    Compare across channels (run Module 1 with different <span class="kbd">CHANNEL_ID</span>s).  
+    PCA scatter helps you see clusters: points near each other use similar vocabulary.
+  </p>
+</section>
 
-<hr>
-<p><small>
-© 2025 — Educational use only. This page runs entirely in your browser using PyScript.
-No keys, no tracking, and no data leaves your computer.
-</small></p>
+<!-- =============================== -->
+<!-- MODULE 4: Save results          -->
+<!-- =============================== -->
+<section class="module" id="save">
+  <h2>Module 4 — Save your results (CSV)</h2>
+  <p>
+    Export a CSV with titles, links, published time, author, and assigned topic. This uses a local data URL (no upload).
+  </p>
+
+  <div class="code-caption">Cell E — Create a download link for the CSV.</div>
+  <py-repl id="cell-save" class="cell" output-mode="replace">
+assert "df" in globals(), "Run previous modules first."
+
+csv_data = df.to_csv(index=False)
+from urllib.parse import quote
+from js import document
+
+href = "data:text/csv;charset=utf-8," + quote(csv_data)
+a = document.createElement("a")
+a.href = href
+a.download = "youtube_topics_results.csv"
+a.textContent = "Download CSV"
+a.style.display = "inline-block"
+a.style.marginTop = "8px"
+
+wrap = document.createElement("div")
+wrap.className = "output"
+wrap.appendChild(a)
+document.currentScript.closest("section").appendChild(wrap)
+
+print("✅ CSV ready — click the Download link that appeared below.")
+  </py-repl>
+</section>
+
+<footer class="small muted" style="margin-top: 28px;">
+  <div class="hr"></div>
+  <p>
+    © 2025 • Teaching lab for “Economics of Social Media & Digital Platforms.” This page runs entirely in your browser via PyScript.
+    Feeds fetched via a read-only CORS relay (you may swap the relay). No keys, no scraping, no PII.
+  </p>
+</footer>
+
+</main>
 </body>
 </html>
+
